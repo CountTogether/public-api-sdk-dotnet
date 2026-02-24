@@ -1,0 +1,6 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\CountTogether.PublicApiSdk.Abstractions\CountTogether.PublicApiSdk.Abstractions.csproj" />
+    <ProjectReference Include="..\CountTogether.PublicApiSdk.Models\CountTogether.PublicApiSdk.Models.csproj" />
+  </ItemGroup>
+</Project>

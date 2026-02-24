@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/example/" />
+  <Folder Name="/solution/">
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/CountTogether.PublicApiSdk.Abstractions/CountTogether.PublicApiSdk.Abstractions.csproj" />
+    <Project Path="src/CountTogether.PublicApiSdk.Models/CountTogether.PublicApiSdk.Models.csproj" />
+    <Project Path="src/CountTogether.PublicApiSdk/CountTogether.PublicApiSdk.csproj" />
+  </Folder>
+  <Folder Name="/tests/" />
+</Solution>
