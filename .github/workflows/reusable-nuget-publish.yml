@@ -2,11 +2,6 @@ name: Reusable NuGet Publish
 
 on:
   workflow_call:
-    inputs:
-      tag:
-        required: true
-        type: string
-        description: 'The release tag (e.g. v1.0.0 or v1.0.0-preview.1). The v-prefix will be stripped automatically.'
 
 permissions:
   contents: read
@@ -19,9 +14,6 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
@@ -29,29 +21,11 @@ jobs:
             9.0.x
             10.0.x
 
-      - name: Restore dependencies
-        run: dotnet restore
-
-      - name: Extract version from tag
-        id: version
-        run: |
-          TAG="${{ inputs.tag }}"
-          VERSION="${TAG#v}"
-          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "📦 Publishing version: $VERSION"
-
-      - name: Build
-        run: dotnet build --configuration Release --no-restore /p:Version=${{ steps.version.outputs.VERSION }}
-
-      - name: Pack
-        run: dotnet pack --configuration Release --no-build /p:Version=${{ steps.version.outputs.VERSION }} --output ./nupkgs
-
-      - name: Upload NuGet packages
-        uses: actions/upload-artifact@v6
+      - name: Download NuGet packages
+        uses: actions/download-artifact@v6
         with:
           name: nuget-packages
-          path: ./nupkgs/
-          retention-days: 7
+          path: ./nupkgs
 
       - name: Push to NuGet
         run: dotnet nuget push "./nupkgs/*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
