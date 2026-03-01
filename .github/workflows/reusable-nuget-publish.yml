@@ -22,7 +22,7 @@ jobs:
             10.0.x
 
       - name: Download NuGet packages
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: nuget-packages
           path: ./nupkgs
