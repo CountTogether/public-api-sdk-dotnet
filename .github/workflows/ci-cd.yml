@@ -22,6 +22,8 @@ jobs:
   build:
     uses: ./.github/workflows/reusable-build.yml
     secrets: inherit
+    with:
+      tag: ${{ github.event.release.tag_name || '' }}
 
   test:
     uses: ./.github/workflows/reusable-test.yml
@@ -33,7 +35,5 @@ jobs:
     uses: ./.github/workflows/reusable-nuget-publish.yml
     secrets: inherit
     needs: [ build, test ]
-    with:
-      tag: ${{ github.event.release.tag_name }}
 
 

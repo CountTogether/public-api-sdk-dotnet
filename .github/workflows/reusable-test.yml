@@ -20,11 +20,16 @@ jobs:
             9.0.x
             10.0.x
 
+      - name: Download build artifacts
+        uses: actions/download-artifact@v6
+        with:
+          name: build-artifacts
+
       - name: Restore dependencies
         run: dotnet restore
 
       - name: Run tests
-        run: dotnet test --configuration Release --no-restore --verbosity normal --logger trx --results-directory ${{ github.workspace }}/TestResults
+        run: dotnet test --configuration Release --no-build --verbosity normal --logger trx --results-directory ${{ github.workspace }}/TestResults
 
       - name: Upload test results
         uses: actions/upload-artifact@v7

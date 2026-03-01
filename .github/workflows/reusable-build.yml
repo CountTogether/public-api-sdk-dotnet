@@ -2,6 +2,12 @@ name: Reusable Build
 
 on:
   workflow_call:
+    inputs:
+      tag:
+        required: false
+        type: string
+        default: ''
+        description: 'The release tag (e.g. v1.0.0). The v-prefix will be stripped automatically.'
 
 permissions:
   contents: read
@@ -20,11 +26,24 @@ jobs:
             9.0.x
             10.0.x
 
+      - name: Extract version from tag
+        if: ${{ inputs.tag != '' }}
+        id: version
+        run: |
+          TAG="${{ inputs.tag }}"
+          VERSION="${TAG#v}"
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "📦 Building version: $VERSION"
+
       - name: Restore dependencies
         run: dotnet restore
 
       - name: Build
-        run: dotnet build --configuration Release --no-restore
+        run: dotnet build --configuration Release --no-restore ${{ steps.version.outputs.VERSION && format('/p:Version={0}', steps.version.outputs.VERSION) || '' }}
+
+      - name: Pack
+        if: ${{ inputs.tag != '' }}
+        run: dotnet pack --configuration Release --no-build /p:Version=${{ steps.version.outputs.VERSION }} --output ./nupkgs
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7
@@ -34,4 +53,12 @@ jobs:
             src/**/bin/Release/
             src/**/obj/Release/
           retention-days: 3
+
+      - name: Upload NuGet packages
+        if: ${{ inputs.tag != '' }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: nuget-packages
+          path: ./nupkgs/
+          retention-days: 7
 
