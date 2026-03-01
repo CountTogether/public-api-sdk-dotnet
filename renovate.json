@@ -1,6 +1,20 @@
 {
-  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
+  "$schema":"https://docs.renovatebot.com/renovate-schema.json",
+  "stabilityDays":14,
+  "prHourlyLimit":5,
+  "extends":[
     "config:recommended"
+  ],
+  "additionalReviewers":[
+    "@manuelmayer-dev"
+  ],
+  "packageRules":[
+    {
+      "matchDatasources":[
+        "dotnet"
+      ],
+      "groupName":"dotnet",
+      "stabilityDays":7
+    }
   ]
 }
