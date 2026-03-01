@@ -1,5 +1,7 @@
 <Solution>
-  <Folder Name="/example/" />
+  <Folder Name="/example/">
+    <Project Path="example/CountTogether.Cli/CountTogether.Cli.csproj" />
+  </Folder>
   <Folder Name="/solution/">
     <File Path="Directory.Build.props" />
     <File Path="Directory.Packages.props" />
