@@ -6,6 +6,11 @@ using CountTogether.PublicApiSdk.Models;
 
 namespace CountTogether.PublicApiSdk.Abstractions.Client;
 
+/// <summary>
+/// Interface for the Count Together client, defining the contract for connecting to the Count Together Public API, managing counters, and handling real-time updates.
+/// This interface abstracts the underlying implementation details and provides a clear API for consumers to interact with the Count Together service.
+/// It includes methods for starting the client, retrieving counters, and updating counter values, as well as events for reacting to changes in counter state and membership.
+/// </summary>
 public interface ICountTogetherClient : IDisposable
 {
     /// <summary>

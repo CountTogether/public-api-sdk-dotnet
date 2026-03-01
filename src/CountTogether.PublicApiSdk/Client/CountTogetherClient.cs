@@ -442,6 +442,7 @@ public sealed class CountTogetherClient : ICountTogetherClient
         GC.SuppressFinalize(this);
     }
 
+    /// <inheritdoc />
     ~CountTogetherClient()
     {
         ReleaseUnmanagedResources();

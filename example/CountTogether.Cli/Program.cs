@@ -1,6 +1,7 @@
 ﻿using CountTogether.PublicApiSdk.Abstractions.Client;
 using CountTogether.PublicApiSdk.Client;
 using CountTogether.PublicApiSdk.Models;
+#pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
 
 namespace CountTogether.Cli;
 
