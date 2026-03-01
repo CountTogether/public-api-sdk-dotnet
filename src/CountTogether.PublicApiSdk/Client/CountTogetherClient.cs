@@ -17,8 +17,10 @@ namespace CountTogether.PublicApiSdk.Client;
 
 public sealed class CountTogetherClient : ICountTogetherClient
 {
-    private string _apiUrl = "https://developers.counttogether.app/v1";
-    private string _wsUrl = "wss://developers.counttogether.app/v1/ws";
+    private const string BaseUrl = "https://developers.counttogether.app";
+    private static string ApiUrl => $"{BaseUrl}/v1";
+    private static string WsUrl => $"wss://{new Uri(BaseUrl).Host}/v1/ws";
+
     private string? _apiToken;
     private HttpClient? _httpClient;
     private bool _configured;
@@ -55,17 +57,6 @@ public sealed class CountTogetherClient : ICountTogetherClient
         _autoReconnect = config.AutoReconnect;
         _configured = true;
 
-        if (!string.IsNullOrWhiteSpace(config.ApiUrlOverride))
-        {
-            _apiUrl = config.ApiUrlOverride;
-
-            // Derive WebSocket URL from the API URL override
-            var wsScheme = config.ApiUrlOverride.StartsWith("https", StringComparison.OrdinalIgnoreCase)
-                ? "wss"
-                : "ws";
-            var uri = new Uri(config.ApiUrlOverride);
-            _wsUrl = $"{wsScheme}://{uri.Host}:{uri.Port}{uri.AbsolutePath.TrimEnd('/')}/ws";
-        }
 
         if (string.IsNullOrWhiteSpace(_apiToken))
         {
@@ -108,7 +99,7 @@ public sealed class CountTogetherClient : ICountTogetherClient
     {
         EnsureConfigured();
         using var httpClient = CreateHttpClient();
-        var response = await httpClient.PostAsync($"{_apiUrl}/counters/{counterId}/increment", null);
+        var response = await httpClient.PostAsync($"{ApiUrl}/counters/{counterId}/increment", null);
         response.EnsureSuccessStatusCode();
         return await DeserializeResponse<long>(response);
     }
@@ -117,7 +108,7 @@ public sealed class CountTogetherClient : ICountTogetherClient
     {
         EnsureConfigured();
         using var httpClient = CreateHttpClient();
-        var response = await httpClient.PostAsync($"{_apiUrl}/counters/{counterId}/decrement", null);
+        var response = await httpClient.PostAsync($"{ApiUrl}/counters/{counterId}/decrement", null);
         response.EnsureSuccessStatusCode();
         return await DeserializeResponse<long>(response);
     }
@@ -131,7 +122,7 @@ public sealed class CountTogetherClient : ICountTogetherClient
         _webSocket = new ClientWebSocket();
         _webSocket.Options.SetRequestHeader("Authorization", $"Bearer {_apiToken}");
 
-        await _webSocket.ConnectAsync(new Uri(_wsUrl), _wsCts.Token);
+        await _webSocket.ConnectAsync(new Uri(WsUrl), _wsCts.Token);
 
         await FetchAndCacheAllCountersAsync();
 
@@ -324,7 +315,7 @@ public sealed class CountTogetherClient : ICountTogetherClient
                 _webSocket = new ClientWebSocket();
                 _webSocket.Options.SetRequestHeader("Authorization", $"Bearer {_apiToken}");
 
-                await _webSocket.ConnectAsync(new Uri(_wsUrl), ct);
+                await _webSocket.ConnectAsync(new Uri(WsUrl), ct);
 
                 // Refresh cache after reconnect
                 await FetchAndCacheAllCountersAsync();
@@ -375,7 +366,7 @@ public sealed class CountTogetherClient : ICountTogetherClient
     private async Task FetchAndCacheAllCountersAsync()
     {
         using var httpClient = CreateHttpClient();
-        var response = await httpClient.GetAsync($"{_apiUrl}/counters");
+        var response = await httpClient.GetAsync($"{ApiUrl}/counters");
         response.EnsureSuccessStatusCode();
         var counters = await DeserializeResponse<List<Counter>>(response);
 
@@ -389,7 +380,7 @@ public sealed class CountTogetherClient : ICountTogetherClient
     private async Task<Counter> FetchCounterAsync(Guid counterId)
     {
         using var httpClient = CreateHttpClient();
-        var response = await httpClient.GetAsync($"{_apiUrl}/counters/{counterId}");
+        var response = await httpClient.GetAsync($"{ApiUrl}/counters/{counterId}");
         response.EnsureSuccessStatusCode();
         return await DeserializeResponse<Counter>(response);
     }
