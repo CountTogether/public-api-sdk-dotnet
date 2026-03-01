@@ -141,4 +141,5 @@ testresults.trx
 TestResults
 publish
 
-mobile/ios/**/*.lock
+nupkg
+*.nupkg

@@ -3,8 +3,10 @@
     <Project Path="example/CountTogether.Cli/CountTogether.Cli.csproj" />
   </Folder>
   <Folder Name="/solution/">
+    <File Path=".gitignore" />
     <File Path="Directory.Build.props" />
     <File Path="Directory.Packages.props" />
+    <File Path="README.md" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/CountTogether.PublicApiSdk.Abstractions/CountTogether.PublicApiSdk.Abstractions.csproj" />
