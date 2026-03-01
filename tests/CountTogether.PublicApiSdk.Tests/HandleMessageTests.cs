@@ -26,7 +26,7 @@ public class HandleMessageTests
     public void HandleMessage_CounterUpdated_FiresEvent_WhenCounterInCache()
     {
         var counterId = Guid.NewGuid().ToString();
-        _client._counterCache[counterId] = new CacheEntry<Counter>(new Counter
+        _client.CounterCache[counterId] = new CacheEntry<Counter>(new Counter
         {
             Id = counterId,
             DisplayName = "Old Name",
@@ -61,7 +61,7 @@ public class HandleMessageTests
     public void HandleMessage_CounterUpdated_MergesOnlyProvidedFields()
     {
         var counterId = Guid.NewGuid().ToString();
-        _client._counterCache[counterId] = new CacheEntry<Counter>(new Counter
+        _client.CounterCache[counterId] = new CacheEntry<Counter>(new Counter
         {
             Id = counterId,
             DisplayName = "Original Name",
@@ -94,7 +94,7 @@ public class HandleMessageTests
     public void HandleMessage_CounterUpdated_UpdatesCache()
     {
         var counterId = Guid.NewGuid().ToString();
-        _client._counterCache[counterId] = new CacheEntry<Counter>(new Counter
+        _client.CounterCache[counterId] = new CacheEntry<Counter>(new Counter
         {
             Id = counterId,
             DisplayName = "Old"
@@ -113,8 +113,8 @@ public class HandleMessageTests
 
         _client.HandleMessage(message);
 
-        Assert.That(_client._counterCache.ContainsKey(counterId), Is.True);
-        Assert.That(_client._counterCache[counterId].Value.DisplayName, Is.EqualTo("Updated"));
+        Assert.That(_client.CounterCache.ContainsKey(counterId), Is.True);
+        Assert.That(_client.CounterCache[counterId].Value.DisplayName, Is.EqualTo("Updated"));
     }
 
     [Test]
@@ -141,7 +141,7 @@ public class HandleMessageTests
         Assert.That(received, Is.Not.Null);
         Assert.That(received!.Id, Is.EqualTo(counterId));
         Assert.That(received.DisplayName, Is.EqualTo("Brand New"));
-        Assert.That(_client._counterCache.ContainsKey(counterId), Is.True);
+        Assert.That(_client.CounterCache.ContainsKey(counterId), Is.True);
     }
 
     #endregion
@@ -152,7 +152,7 @@ public class HandleMessageTests
     public void HandleMessage_CounterDeleted_FiresEvent()
     {
         var counterId = Guid.NewGuid();
-        _client._counterCache[counterId.ToString()] = new CacheEntry<Counter>(new Counter
+        _client.CounterCache[counterId.ToString()] = new CacheEntry<Counter>(new Counter
         {
             Id = counterId.ToString(),
             DisplayName = "To Delete"
@@ -181,7 +181,7 @@ public class HandleMessageTests
     public void HandleMessage_CounterDeleted_RemovesFromCache()
     {
         var counterId = Guid.NewGuid();
-        _client._counterCache[counterId.ToString()] = new CacheEntry<Counter>(new Counter
+        _client.CounterCache[counterId.ToString()] = new CacheEntry<Counter>(new Counter
         {
             Id = counterId.ToString(),
             DisplayName = "To Delete"
@@ -199,7 +199,7 @@ public class HandleMessageTests
 
         _client.HandleMessage(message);
 
-        Assert.That(_client._counterCache.ContainsKey(counterId.ToString()), Is.False);
+        Assert.That(_client.CounterCache.ContainsKey(counterId.ToString()), Is.False);
     }
 
     #endregion
@@ -234,7 +234,7 @@ public class HandleMessageTests
     public void HandleMessage_CounterMemberlistChanged_InvalidatesCache()
     {
         var counterId = Guid.NewGuid();
-        _client._counterCache[counterId.ToString()] = new CacheEntry<Counter>(new Counter
+        _client.CounterCache[counterId.ToString()] = new CacheEntry<Counter>(new Counter
         {
             Id = counterId.ToString(),
             DisplayName = "Has Members"
@@ -252,7 +252,7 @@ public class HandleMessageTests
 
         _client.HandleMessage(message);
 
-        Assert.That(_client._counterCache.ContainsKey(counterId.ToString()), Is.False);
+        Assert.That(_client.CounterCache.ContainsKey(counterId.ToString()), Is.False);
     }
 
     #endregion
@@ -314,7 +314,7 @@ public class HandleMessageTests
     public void HandleMessage_NoSubscribers_DoesNotThrow()
     {
         var counterId = Guid.NewGuid().ToString();
-        _client._counterCache[counterId] = new CacheEntry<Counter>(new Counter
+        _client.CounterCache[counterId] = new CacheEntry<Counter>(new Counter
         {
             Id = counterId,
             DisplayName = "Test"

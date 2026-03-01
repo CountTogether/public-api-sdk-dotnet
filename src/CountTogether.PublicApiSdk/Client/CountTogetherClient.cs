@@ -33,7 +33,8 @@ public sealed class CountTogetherClient : ICountTogetherClient
     private CancellationTokenSource? _wsCts;
     private volatile bool _disposed;
 
-    internal readonly ConcurrentDictionary<string, CacheEntry<Counter>> _counterCache = new();
+    internal readonly ConcurrentDictionary<string, CacheEntry<Counter>> CounterCache = new();
+
     private static readonly TimeSpan CacheExpiration = TimeSpan.FromMinutes(1);
 
     private static readonly JsonSerializerOptions JsonSerializerOptions = new()
@@ -73,13 +74,13 @@ public sealed class CountTogetherClient : ICountTogetherClient
     {
         EnsureConfigured();
 
-        var hasExpired = _counterCache.Values.Any(e => e.IsExpired(CacheExpiration));
-        if (_counterCache.IsEmpty || hasExpired)
+        var hasExpired = CounterCache.Values.Any(e => e.IsExpired(CacheExpiration));
+        if (CounterCache.IsEmpty || hasExpired)
         {
             await FetchAndCacheAllCountersAsync();
         }
 
-        return _counterCache.Values.Select(e => e.Value).ToList();
+        return CounterCache.Values.Select(e => e.Value).ToList();
     }
 
     public async Task<Counter> GetCounterAsync(Guid counterId)
@@ -87,14 +88,14 @@ public sealed class CountTogetherClient : ICountTogetherClient
         EnsureConfigured();
         var key = counterId.ToString();
 
-        if (_counterCache.TryGetValue(key, out var entry) && !entry.IsExpired(CacheExpiration))
+        if (CounterCache.TryGetValue(key, out var entry) && !entry.IsExpired(CacheExpiration))
         {
             return entry.Value;
         }
 
         // Expired or missing – fetch single counter from API and update cache
         var counter = await FetchCounterAsync(counterId);
-        _counterCache[key] = new CacheEntry<Counter>(counter);
+        CounterCache[key] = new CacheEntry<Counter>(counter);
         return counter;
     }
 
@@ -145,8 +146,7 @@ public sealed class CountTogetherClient : ICountTogetherClient
 
                 do
                 {
-                    result = await _webSocket.ReceiveAsync(
-                        new ArraySegment<byte>(buffer), ct);
+                    result = await _webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), ct);
 
                     if (result.MessageType == WebSocketMessageType.Close)
                     {
@@ -218,7 +218,7 @@ public sealed class CountTogetherClient : ICountTogetherClient
 
         var key = updatedParams.CounterId;
 
-        if (_counterCache.TryGetValue(key, out var entry))
+        if (CounterCache.TryGetValue(key, out var entry))
         {
             // Merge updated fields into the cached counter
             var counter = entry.Value;
@@ -232,7 +232,7 @@ public sealed class CountTogetherClient : ICountTogetherClient
                 counter.Data = updatedParams.Data;
             }
 
-            _counterCache[key] = new CacheEntry<Counter>(counter);
+            CounterCache[key] = new CacheEntry<Counter>(counter);
             CounterUpdated?.Invoke(counter);
         }
         else
@@ -245,7 +245,7 @@ public sealed class CountTogetherClient : ICountTogetherClient
                 Data = updatedParams.Data
             };
 
-            _counterCache[key] = new CacheEntry<Counter>(counter);
+            CounterCache[key] = new CacheEntry<Counter>(counter);
             CounterUpdated?.Invoke(counter);
         }
     }
@@ -264,7 +264,7 @@ public sealed class CountTogetherClient : ICountTogetherClient
             return;
         }
 
-        _counterCache.TryRemove(deletedParams.CounterId, out _);
+        CounterCache.TryRemove(deletedParams.CounterId, out _);
 
         if (Guid.TryParse(deletedParams.CounterId, out var counterId))
         {
@@ -287,7 +287,7 @@ public sealed class CountTogetherClient : ICountTogetherClient
         }
 
         // Invalidate cache entry so the next access fetches fresh data including the new member list
-        _counterCache.TryRemove(changedParams.CounterId, out _);
+        CounterCache.TryRemove(changedParams.CounterId, out _);
 
         if (Guid.TryParse(changedParams.CounterId, out var counterId))
         {
@@ -373,10 +373,10 @@ public sealed class CountTogetherClient : ICountTogetherClient
         response.EnsureSuccessStatusCode();
         var counters = await DeserializeResponse<List<Counter>>(response);
 
-        _counterCache.Clear();
+        CounterCache.Clear();
         foreach (var counter in counters)
         {
-            _counterCache[counter.Id] = new CacheEntry<Counter>(counter);
+            CounterCache[counter.Id] = new CacheEntry<Counter>(counter);
         }
     }
 
