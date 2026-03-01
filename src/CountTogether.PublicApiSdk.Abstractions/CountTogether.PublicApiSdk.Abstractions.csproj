@@ -13,7 +13,4 @@
   <ItemGroup>
     <ProjectReference Include="..\CountTogether.PublicApiSdk.Models\CountTogether.PublicApiSdk.Models.csproj" />
   </ItemGroup>
-  <ItemGroup>
-    <PackageReference Include="System.Text.Json" />
-  </ItemGroup>
 </Project>

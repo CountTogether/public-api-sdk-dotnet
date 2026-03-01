@@ -10,8 +10,4 @@
         <None Include="../../logo.png" Pack="true" PackagePath="/"/>
     </ItemGroup>
 
-    <ItemGroup>
-        <PackageReference Include="System.Text.Json" />
-    </ItemGroup>
-
 </Project>
