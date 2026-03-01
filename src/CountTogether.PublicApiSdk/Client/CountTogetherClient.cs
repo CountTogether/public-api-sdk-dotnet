@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Net.WebSockets;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -12,6 +13,8 @@ using System.Threading.Tasks;
 using CountTogether.PublicApiSdk.Abstractions.Client;
 using CountTogether.PublicApiSdk.Models;
 using CountTogether.PublicApiSdk.Models.WebSocket;
+
+[assembly: InternalsVisibleTo("CountTogether.PublicApiSdk.Tests")]
 
 namespace CountTogether.PublicApiSdk.Client;
 
@@ -30,7 +33,7 @@ public sealed class CountTogetherClient : ICountTogetherClient
     private CancellationTokenSource? _wsCts;
     private volatile bool _disposed;
 
-    private readonly ConcurrentDictionary<string, CacheEntry<Counter>> _counterCache = new();
+    internal readonly ConcurrentDictionary<string, CacheEntry<Counter>> _counterCache = new();
     private static readonly TimeSpan CacheExpiration = TimeSpan.FromMinutes(1);
 
     private static readonly JsonSerializerOptions JsonSerializerOptions = new()
@@ -170,7 +173,7 @@ public sealed class CountTogetherClient : ICountTogetherClient
         }
     }
 
-    private void HandleMessage(string message)
+    internal void HandleMessage(string message)
     {
         try
         {

@@ -11,5 +11,7 @@
     <Project Path="src/CountTogether.PublicApiSdk.Models/CountTogether.PublicApiSdk.Models.csproj" />
     <Project Path="src/CountTogether.PublicApiSdk/CountTogether.PublicApiSdk.csproj" />
   </Folder>
-  <Folder Name="/tests/" />
+  <Folder Name="/tests/">
+    <Project Path="tests/CountTogether.PublicApiSdk.Tests/CountTogether.PublicApiSdk.Tests.csproj" />
+  </Folder>
 </Solution>
