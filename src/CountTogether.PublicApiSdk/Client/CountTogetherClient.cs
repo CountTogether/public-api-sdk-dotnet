@@ -18,6 +18,7 @@ using CountTogether.PublicApiSdk.Models.WebSocket;
 
 namespace CountTogether.PublicApiSdk.Client;
 
+/// <inheritdoc />
 public sealed class CountTogetherClient : ICountTogetherClient
 {
     private const string BaseUrl = "https://developers.counttogether.app";
@@ -46,10 +47,16 @@ public sealed class CountTogetherClient : ICountTogetherClient
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
+    /// <inheritdoc />
     public event Action<Counter>? CounterUpdated;
+
+    /// <inheritdoc />
     public event Action<Guid>? CounterDeleted;
+
+    /// <inheritdoc />
     public event Action<Guid>? CounterMemberlistChanged;
 
+    /// <inheritdoc />
     public async Task StartAsync(
         Action<CountTogetherClientConfiguration> configureClient, HttpClient? httpClient = null)
     {
@@ -70,6 +77,7 @@ public sealed class CountTogetherClient : ICountTogetherClient
         await ConnectWebSocketAsync();
     }
 
+    /// <inheritdoc />
     public async Task<List<Counter>> GetCountersAsync()
     {
         EnsureConfigured();
@@ -83,6 +91,7 @@ public sealed class CountTogetherClient : ICountTogetherClient
         return CounterCache.Values.Select(e => e.Value).ToList();
     }
 
+    /// <inheritdoc />
     public async Task<Counter> GetCounterAsync(Guid counterId)
     {
         EnsureConfigured();
@@ -99,6 +108,7 @@ public sealed class CountTogetherClient : ICountTogetherClient
         return counter;
     }
 
+    /// <inheritdoc />
     public async Task<long> IncrementCounterAsync(Guid counterId)
     {
         EnsureConfigured();
@@ -108,6 +118,7 @@ public sealed class CountTogetherClient : ICountTogetherClient
         return await DeserializeResponse<long>(response);
     }
 
+    /// <inheritdoc />
     public async Task<long> DecrementCounterAsync(Guid counterId)
     {
         EnsureConfigured();
@@ -424,6 +435,7 @@ public sealed class CountTogetherClient : ICountTogetherClient
         DisconnectWebSocketAsync().GetAwaiter().GetResult();
     }
 
+    /// <inheritdoc />
     public void Dispose()
     {
         ReleaseUnmanagedResources();

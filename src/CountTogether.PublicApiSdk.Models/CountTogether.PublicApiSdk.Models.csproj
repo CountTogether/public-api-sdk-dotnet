@@ -1,5 +1,15 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
+    <PropertyGroup>
+        <PackageId>CountTogether.PublicApiSdk.Models</PackageId>
+        <Description>Model classes for the CountTogether Public API SDK.</Description>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <None Include="../../README.md" Pack="true" PackagePath="/"/>
+        <None Include="../../logo.png" Pack="true" PackagePath="/"/>
+    </ItemGroup>
+
     <ItemGroup>
         <PackageReference Include="System.Text.Json" />
     </ItemGroup>

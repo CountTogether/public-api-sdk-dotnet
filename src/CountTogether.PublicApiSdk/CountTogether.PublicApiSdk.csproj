@@ -1,4 +1,15 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <PackageId>CountTogether.PublicApiSdk</PackageId>
+    <Description>Official .NET SDK for the CountTogether Public API. Provides a typed client for REST and WebSocket communication.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="/"/>
+    <None Include="../../logo.png" Pack="true" PackagePath="/"/>
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\CountTogether.PublicApiSdk.Abstractions\CountTogether.PublicApiSdk.Abstractions.csproj" />
     <ProjectReference Include="..\CountTogether.PublicApiSdk.Models\CountTogether.PublicApiSdk.Models.csproj" />

@@ -1,10 +1,37 @@
 <Project>
 
     <PropertyGroup>
-        <TargetFramework>netstandard2.1</TargetFramework>
+        <TargetFrameworks>netstandard2.1;net9.0;net10.0</TargetFrameworks>
         <Nullable>enable</Nullable>
         <WarningsAsErrors>CS8602</WarningsAsErrors>
         <LangVersion>latest</LangVersion>
+    </PropertyGroup>
+
+    <!-- NuGet package metadata (shared across all packable projects) -->
+    <PropertyGroup>
+        <Authors>CountTogether</Authors>
+        <Company>CountTogether</Company>
+        <Copyright>Copyright © CountTogether $([System.DateTime]::Now.Year)</Copyright>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <PackageProjectUrl>https://github.com/nicobh15/public-api-sdk-dotnet</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/nicobh15/public-api-sdk-dotnet</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <PackageTags>counttogether;sdk;api;counter</PackageTags>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <PackageIcon>logo.png</PackageIcon>
+
+        <!-- Versioning: override via CI with /p:Version=x.y.z -->
+        <Version>0.1.0</Version>
+
+        <!-- Generate XML docs so IntelliSense works for consumers -->
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+        <!-- Deterministic & reproducible builds -->
+        <Deterministic>true</Deterministic>
+
+        <!-- Include symbols for debugging -->
+        <IncludeSymbols>true</IncludeSymbols>
+        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     </PropertyGroup>
 
 </Project>

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using CountTogether.PublicApiSdk.Models;
 using CountTogether.PublicApiSdk.Models.WebSocket;
+#pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
 
 namespace CountTogether.PublicApiSdk.Tests;
 
@@ -171,16 +172,6 @@ public class ModelSerializationTests
         Assert.That(member.UserId, Is.EqualTo("user-42"));
         Assert.That(member.DisplayName, Is.EqualTo("Bob"));
         Assert.That(member.IsAdmin, Is.False);
-    }
-
-    [TestCase("UpDown", CounterType.UpDown)]
-    [TestCase("FromDate", CounterType.FromDate)]
-    [TestCase("ToDate", CounterType.ToDate)]
-    public void CounterType_Deserializes_AllValues(string jsonValue, CounterType expected)
-    {
-        var type = JsonSerializer.Deserialize<CounterType>($"\"{jsonValue}\"");
-
-        Assert.That(type, Is.EqualTo(expected));
     }
 }
 

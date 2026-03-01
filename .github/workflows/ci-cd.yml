@@ -1,0 +1,39 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - 'main'
+  pull_request:
+    branches:
+      - 'main'
+  release:
+    types: [ published ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  checks: write
+  pull-requests: write
+  statuses: write
+
+jobs:
+  build:
+    uses: ./.github/workflows/reusable-build.yml
+    secrets: inherit
+
+  test:
+    uses: ./.github/workflows/reusable-test.yml
+    secrets: inherit
+    needs: [ build ]
+
+  publish:
+    if: ${{ github.event_name == 'release' }}
+    uses: ./.github/workflows/reusable-nuget-publish.yml
+    secrets: inherit
+    needs: [ build, test ]
+    with:
+      tag: ${{ github.event.release.tag_name }}
+
+
