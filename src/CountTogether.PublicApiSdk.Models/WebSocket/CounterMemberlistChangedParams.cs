@@ -3,25 +3,15 @@ using System.Text.Json.Serialization;
 namespace CountTogether.PublicApiSdk.Models.WebSocket;
 
 /// <summary>
-/// Defines the type of a counter.
+/// Params payload for the "counterMemberlistChanged" WebSocket event.
 /// </summary>
-[JsonConverter(typeof(JsonStringEnumConverter))]
-public enum CounterType
+public sealed class CounterMemberlistChangedParams
 {
     /// <summary>
-    /// Numeric counter with optional increment/decrement behavior.
+    /// The id of the counter whose member list changed (UUID).
     /// </summary>
-    UpDown,
-
-    /// <summary>
-    /// Tracks duration since a fixed start date.
-    /// </summary>
-    FromDate,
-
-    /// <summary>
-    /// Tracks remaining time until a target date.
-    /// </summary>
-    ToDate
+    [JsonPropertyName("counterId")]
+    public string CounterId { get; set; } = null!;
 }
 
 

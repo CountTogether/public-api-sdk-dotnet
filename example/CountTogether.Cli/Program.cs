@@ -77,6 +77,7 @@ public static class Program
             "🔍  Get counter details",
             "➕  Increment a counter",
             "➖  Decrement a counter",
+            "👀  Watch live events",
             "🚪  Exit"
         };
 
@@ -101,6 +102,9 @@ public static class Program
                     await DecrementCounterAsync();
                     break;
                 case 4:
+                    await WatchLiveEventsAsync();
+                    break;
+                case 5:
                     return;
             }
         }
@@ -218,7 +222,10 @@ public static class Program
         try
         {
             var counter = await SelectCounterAsync("Select a counter to view details");
-            if (counter == null) return;
+            if (counter == null)
+            {
+                return;
+            }
 
             var details = await _client.GetCounterAsync(Guid.Parse(counter.Id));
 
@@ -264,7 +271,10 @@ public static class Program
         try
         {
             var counter = await SelectCounterAsync("Select a counter to increment", CounterType.UpDown);
-            if (counter == null) return;
+            if (counter == null)
+            {
+                return;
+            }
 
             var newValue = await _client.IncrementCounterAsync(Guid.Parse(counter.Id));
 
@@ -285,7 +295,10 @@ public static class Program
         try
         {
             var counter = await SelectCounterAsync("Select a counter to decrement", CounterType.UpDown);
-            if (counter == null) return;
+            if (counter == null)
+            {
+                return;
+            }
 
             var newValue = await _client.DecrementCounterAsync(Guid.Parse(counter.Id));
 
@@ -297,6 +310,93 @@ public static class Program
         {
             PrintError(ex);
         }
+
+        WaitForKey();
+    }
+
+    private static async Task WatchLiveEventsAsync()
+    {
+        Console.Clear();
+        PrintHeader();
+
+        Console.ForegroundColor = ConsoleColor.Cyan;
+        Console.WriteLine("── Live Event Watcher ──\n");
+        Console.ResetColor();
+        Console.ForegroundColor = ConsoleColor.DarkGray;
+        Console.WriteLine("Listening for WebSocket events. Press any key to stop.\n");
+        Console.ResetColor();
+
+        var eventCount = 0;
+
+        void OnCounterUpdated(Counter counter)
+        {
+            Interlocked.Increment(ref eventCount);
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.Write($"  [{DateTime.Now:HH:mm:ss}] ");
+            Console.ForegroundColor = ConsoleColor.White;
+            Console.Write("counterUpdated");
+            Console.ResetColor();
+            Console.Write("  ─  ");
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.Write($"\"{counter.DisplayName}\"");
+            Console.ResetColor();
+            Console.WriteLine($"  (ID: {counter.Id[..8]}...)");
+
+            if (counter.Data.HasValue)
+            {
+                Console.ForegroundColor = ConsoleColor.DarkGray;
+                Console.WriteLine($"                        Data: {counter.Data.Value.GetRawText()}");
+                Console.ResetColor();
+            }
+        }
+
+        void OnCounterDeleted(Guid counterId)
+        {
+            Interlocked.Increment(ref eventCount);
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.Write($"  [{DateTime.Now:HH:mm:ss}] ");
+            Console.ForegroundColor = ConsoleColor.White;
+            Console.Write("counterDeleted");
+            Console.ResetColor();
+            Console.WriteLine($"  ─  ID: {counterId}");
+        }
+
+        void OnCounterMemberlistChanged(Guid counterId)
+        {
+            Interlocked.Increment(ref eventCount);
+            Console.ForegroundColor = ConsoleColor.Magenta;
+            Console.Write($"  [{DateTime.Now:HH:mm:ss}] ");
+            Console.ForegroundColor = ConsoleColor.White;
+            Console.Write("counterMemberlistChanged");
+            Console.ResetColor();
+            Console.WriteLine($"  ─  ID: {counterId}");
+        }
+
+        _client.CounterUpdated += OnCounterUpdated;
+        _client.CounterDeleted += OnCounterDeleted;
+        _client.CounterMemberlistChanged += OnCounterMemberlistChanged;
+
+        try
+        {
+            // Wait until the user presses a key
+            while (!Console.KeyAvailable)
+            {
+                await Task.Delay(100);
+            }
+
+            // Consume the key press
+            Console.ReadKey(intercept: true);
+        }
+        finally
+        {
+            _client.CounterUpdated -= OnCounterUpdated;
+            _client.CounterDeleted -= OnCounterDeleted;
+            _client.CounterMemberlistChanged -= OnCounterMemberlistChanged;
+        }
+
+        Console.ForegroundColor = ConsoleColor.DarkGray;
+        Console.WriteLine($"\nStopped. Received {eventCount} event(s).");
+        Console.ResetColor();
 
         WaitForKey();
     }
@@ -340,7 +440,9 @@ public static class Program
         var selected = ShowMenu(title, menuItems);
 
         if (selected == counters.Count)
+        {
             return null;
+        }
 
         return counters[selected];
     }
@@ -349,7 +451,7 @@ public static class Program
     {
         // Header
         Console.ForegroundColor = ConsoleColor.DarkGray;
-        Console.WriteLine($"  {"Type",-14} {"Name",-30} {"Members",-10} {"ID"}");
+        Console.WriteLine($"  {"Type",-14} {"Name",-30} {"Members",-10} ID");
         Console.WriteLine($"  {new string('─', 14)} {new string('─', 30)} {new string('─', 10)} {new string('─', 36)}");
         Console.ResetColor();
 
