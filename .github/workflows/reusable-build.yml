@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
@@ -54,11 +54,13 @@ jobs:
           path: |
             src/**/bin/Release/
             src/**/obj/Release/
+            tests/**/bin/Release/
+            tests/**/obj/Release/
           retention-days: 3
 
       - name: Upload NuGet packages
         if: ${{ inputs.tag != '' }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: nuget-packages
           path: ./nupkgs/

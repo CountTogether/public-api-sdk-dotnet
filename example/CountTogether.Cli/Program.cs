@@ -228,35 +228,20 @@ public static class Program
                 return;
             }
 
-            var details = await _client.GetCounterAsync(Guid.Parse(counter.Id));
+            var details = await _client.GetCounterAsync(counter.Id);
 
             Console.ForegroundColor = ConsoleColor.Green;
             Console.WriteLine($"\n── Counter Details ──\n");
             Console.ResetColor();
 
             Console.WriteLine($"  ID:           {details.Id}");
-            Console.WriteLine($"  Name:         {details.DisplayName}");
+            Console.WriteLine($"  Name:         {details.Name}");
             Console.WriteLine($"  Type:         {details.Type}");
-            Console.WriteLine($"  Members:      {details.Members.Count}");
+            Console.WriteLine($"  Value:        {FormatValue(details)}");
 
-            if (details.Members.Count > 0)
+            if (details.Date.HasValue)
             {
-                Console.ForegroundColor = ConsoleColor.DarkGray;
-                Console.WriteLine("\n  Members:");
-                foreach (var member in details.Members)
-                {
-                    var adminBadge = member.IsAdmin ? " [Admin]" : "";
-                    Console.WriteLine($"    • {member.DisplayName}{adminBadge}");
-                }
-                Console.ResetColor();
-            }
-
-            if (details.Data.HasValue)
-            {
-                Console.ForegroundColor = ConsoleColor.DarkGray;
-                Console.WriteLine($"\n  Data:");
-                Console.WriteLine($"    {details.Data.Value.GetRawText()}");
-                Console.ResetColor();
+                Console.WriteLine($"  Date:         {details.Date.Value:yyyy-MM-dd}");
             }
         }
         catch (Exception ex)
@@ -277,10 +262,13 @@ public static class Program
                 return;
             }
 
-            var newValue = await _client.IncrementCounterAsync(Guid.Parse(counter.Id));
+            var amount = ReadAmount();
+            var newValue = amount.HasValue
+                ? await _client.IncrementCounterAsync(counter.Id, amount.Value)
+                : await _client.IncrementCounterAsync(counter.Id);
 
             Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine($"\n✓ Counter \"{counter.DisplayName}\" incremented. New value: {newValue}");
+            Console.WriteLine($"\n✓ Counter \"{counter.Name}\" incremented. New value: {newValue}");
             Console.ResetColor();
         }
         catch (Exception ex)
@@ -301,10 +289,13 @@ public static class Program
                 return;
             }
 
-            var newValue = await _client.DecrementCounterAsync(Guid.Parse(counter.Id));
+            var amount = ReadAmount();
+            var newValue = amount.HasValue
+                ? await _client.DecrementCounterAsync(counter.Id, amount.Value)
+                : await _client.DecrementCounterAsync(counter.Id);
 
             Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine($"\n✓ Counter \"{counter.DisplayName}\" decremented. New value: {newValue}");
+            Console.WriteLine($"\n✓ Counter \"{counter.Name}\" decremented. New value: {newValue}");
             Console.ResetColor();
         }
         catch (Exception ex)
@@ -339,16 +330,13 @@ public static class Program
             Console.ResetColor();
             Console.Write("  ─  ");
             Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.Write($"\"{counter.DisplayName}\"");
+            Console.Write($"\"{counter.Name}\"");
             Console.ResetColor();
-            Console.WriteLine($"  (ID: {counter.Id[..8]}...)");
+            Console.WriteLine($"  (ID: {counter.Id.ToString()[..8]}...)");
 
-            if (counter.Data.HasValue)
-            {
-                Console.ForegroundColor = ConsoleColor.DarkGray;
-                Console.WriteLine($"                        Data: {counter.Data.Value.GetRawText()}");
-                Console.ResetColor();
-            }
+            Console.ForegroundColor = ConsoleColor.DarkGray;
+            Console.WriteLine($"                        Value: {FormatValue(counter)}");
+            Console.ResetColor();
         }
 
         void OnCounterDeleted(Guid counterId)
@@ -434,7 +422,7 @@ public static class Program
                 CounterType.ToDate => "⏳",
                 _ => "❓"
             };
-            menuItems[i] = $"{typeIcon}  {counters[i].DisplayName}  (ID: {counters[i].Id[..8]}...)";
+            menuItems[i] = $"{typeIcon}  {counters[i].Name}  (ID: {counters[i].Id.ToString()[..8]}...)";
         }
         menuItems[^1] = "↩  Back";
 
@@ -452,8 +440,8 @@ public static class Program
     {
         // Header
         Console.ForegroundColor = ConsoleColor.DarkGray;
-        Console.WriteLine($"  {"Type",-14} {"Name",-30} {"Members",-10} ID");
-        Console.WriteLine($"  {new string('─', 14)} {new string('─', 30)} {new string('─', 10)} {new string('─', 36)}");
+        Console.WriteLine($"  {"Type",-14} {"Name",-30} {"Value",-28} ID");
+        Console.WriteLine($"  {new string('─', 14)} {new string('─', 30)} {new string('─', 28)} {new string('─', 36)}");
         Console.ResetColor();
 
         foreach (var counter in counters)
@@ -466,10 +454,29 @@ public static class Program
                 _ => "❓ Unknown"
             };
 
-            Console.WriteLine($"  {typeStr,-14} {counter.DisplayName,-30} {counter.Members.Count,-10} {counter.Id}");
+            Console.WriteLine($"  {typeStr,-14} {counter.Name,-30} {FormatValue(counter),-28} {counter.Id}");
         }
 
         Console.WriteLine();
+    }
+
+    private static string FormatValue(Counter counter)
+    {
+        return counter.Type switch
+        {
+            CounterType.FromDate => $"{counter.Value} days since {counter.Date:yyyy-MM-dd}",
+            CounterType.ToDate => $"{counter.Value} days until {counter.Date:yyyy-MM-dd}",
+            _ => counter.Value?.ToString() ?? "-"
+        };
+    }
+
+    private static int? ReadAmount()
+    {
+        Console.ForegroundColor = ConsoleColor.Yellow;
+        Console.Write("Amount (Enter = step size): ");
+        Console.ResetColor();
+        var input = Console.ReadLine()?.Trim();
+        return int.TryParse(input, out var amount) && amount > 0 ? amount : null;
     }
 
     private static void PrintError(Exception ex)

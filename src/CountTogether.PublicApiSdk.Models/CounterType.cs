@@ -1,25 +1,27 @@
-using System.Text.Json.Serialization;
-
 namespace CountTogether.PublicApiSdk.Models;
 
 /// <summary>
 /// Defines the type of a counter.
 /// </summary>
-[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum CounterType
 {
     /// <summary>
-    /// Numeric counter with optional increment/decrement behavior.
+    /// A counter type that this SDK version does not know.
     /// </summary>
-    UpDown,
+    Unknown = 0,
 
     /// <summary>
-    /// Tracks duration since a fixed start date.
+    /// Numeric counter that can be incremented and decremented.
     /// </summary>
-    FromDate,
+    UpDown = 1,
 
     /// <summary>
-    /// Tracks remaining time until a target date.
+    /// Counts the days since a start date.
     /// </summary>
-    ToDate
+    FromDate = 2,
+
+    /// <summary>
+    /// Counts the days until a target date.
+    /// </summary>
+    ToDate = 3
 }

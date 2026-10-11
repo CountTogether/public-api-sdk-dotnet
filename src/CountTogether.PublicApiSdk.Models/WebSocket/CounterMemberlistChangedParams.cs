@@ -1,3 +1,4 @@
+using System;
 using System.Text.Json.Serialization;
 
 namespace CountTogether.PublicApiSdk.Models.WebSocket;
@@ -8,24 +9,8 @@ namespace CountTogether.PublicApiSdk.Models.WebSocket;
 public sealed class CounterMemberlistChangedParams
 {
     /// <summary>
-    /// The id of the counter whose member list changed (UUID).
+    /// The id of the counter whose member list changed.
     /// </summary>
     [JsonPropertyName("counterId")]
-    public string CounterId { get; set; } = null!;
+    public Guid CounterId { get; set; }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

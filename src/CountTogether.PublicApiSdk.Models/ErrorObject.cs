@@ -14,9 +14,9 @@ public sealed class ErrorObject
     public string Message { get; set; } = null!;
 
     /// <summary>
-    /// Machine-readable error code.
+    /// Machine-readable error code, or <c>null</c> when the API does not provide one.
     /// </summary>
     [JsonPropertyName("code")]
-    public int Code { get; set; }
+    public int? Code { get; set; }
 }
 
