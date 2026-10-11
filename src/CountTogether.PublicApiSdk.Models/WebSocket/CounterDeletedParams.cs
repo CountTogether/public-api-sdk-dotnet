@@ -1,3 +1,4 @@
+using System;
 using System.Text.Json.Serialization;
 
 namespace CountTogether.PublicApiSdk.Models.WebSocket;
@@ -8,9 +9,8 @@ namespace CountTogether.PublicApiSdk.Models.WebSocket;
 public sealed class CounterDeletedParams
 {
     /// <summary>
-    /// The id of the deleted counter (UUID).
+    /// The id of the deleted counter.
     /// </summary>
     [JsonPropertyName("counterId")]
-    public string CounterId { get; set; } = null!;
+    public Guid CounterId { get; set; }
 }
-
