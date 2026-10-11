@@ -24,125 +24,128 @@ public class HandleMessageTests
     #region counterUpdated
 
     [Test]
-    public void HandleMessage_CounterUpdated_FiresEvent_WhenCounterInCache()
+    public void HandleMessage_CounterUpdated_UpDown_ReplacesCachedCounter()
     {
-        var counterId = Guid.NewGuid().ToString();
-        _client.CounterCache[counterId] = new CacheEntry<Counter>(new Counter
+        var counterId = Guid.NewGuid();
+        var created = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var original = new Counter
         {
-            Id = counterId,
-            DisplayName = "Old Name",
-            Type = CounterType.UpDown
-        });
+            Id = counterId, Name = "Old Name", Type = CounterType.UpDown, Value = 1, Created = created
+        };
+        _client.CounterCache[counterId] = new CacheEntry<Counter>(original);
 
         Counter? received = null;
         _client.CounterUpdated += c => received = c;
 
-        var message = $$"""
+        _client.HandleMessage($$"""
         {
             "jsonrpc": "2.0",
             "method": "counterUpdated",
-            "params": {
-                "counterId": "{{counterId}}",
-                "displayName": "New Name",
-                "data": { "value": 10 }
-            }
+            "params": { "counterId": "{{counterId}}", "name": "New Name", "type": "UpDown", "value": 10 }
         }
-        """;
-
-        _client.HandleMessage(message);
+        """);
 
         Assert.That(received, Is.Not.Null);
         Assert.That(received!.Id, Is.EqualTo(counterId));
-        Assert.That(received.DisplayName, Is.EqualTo("New Name"));
+        Assert.That(received.Name, Is.EqualTo("New Name"));
         Assert.That(received.Type, Is.EqualTo(CounterType.UpDown));
-        Assert.That(received.Data, Is.Not.Null);
+        Assert.That(received.Value, Is.EqualTo(10));
+        Assert.That(received.Created, Is.EqualTo(created));
+        Assert.That(received, Is.Not.SameAs(original));
+        Assert.That(original.Value, Is.EqualTo(1));
+        Assert.That(_client.CounterCache[counterId].Value, Is.SameAs(received));
     }
 
     [Test]
-    public void HandleMessage_CounterUpdated_MergesOnlyProvidedFields()
+    public void HandleMessage_CounterUpdated_FromDate_CarriesStartDate()
     {
-        var counterId = Guid.NewGuid().ToString();
-        _client.CounterCache[counterId] = new CacheEntry<Counter>(new Counter
-        {
-            Id = counterId,
-            DisplayName = "Original Name",
-            Type = CounterType.FromDate
-        });
-
+        var counterId = Guid.NewGuid();
         Counter? received = null;
         _client.CounterUpdated += c => received = c;
 
-        // Only data changes, no displayName in the event
-        var message = $$"""
+        _client.HandleMessage($$"""
         {
             "jsonrpc": "2.0",
             "method": "counterUpdated",
-            "params": {
-                "counterId": "{{counterId}}",
-                "data": { "value": 5 }
-            }
+            "params": { "counterId": "{{counterId}}", "name": "Together", "type": "FromDate", "value": 548, "startDate": "2025-04-11" }
         }
-        """;
-
-        _client.HandleMessage(message);
+        """);
 
         Assert.That(received, Is.Not.Null);
-        Assert.That(received!.DisplayName, Is.EqualTo("Original Name"));
-        Assert.That(received.Data, Is.Not.Null);
+        Assert.That(received!.Type, Is.EqualTo(CounterType.FromDate));
+        Assert.That(received.Value, Is.EqualTo(548));
+        Assert.That(received.Date, Is.EqualTo(new DateOnly(2025, 4, 11)));
     }
 
     [Test]
-    public void HandleMessage_CounterUpdated_UpdatesCache()
+    public void HandleMessage_CounterUpdated_ToDate_CarriesEndDate()
     {
-        var counterId = Guid.NewGuid().ToString();
-        _client.CounterCache[counterId] = new CacheEntry<Counter>(new Counter
-        {
-            Id = counterId,
-            DisplayName = "Old"
-        });
+        var counterId = Guid.NewGuid();
+        Counter? received = null;
+        _client.CounterUpdated += c => received = c;
 
-        var message = $$"""
+        _client.HandleMessage($$"""
         {
             "jsonrpc": "2.0",
             "method": "counterUpdated",
-            "params": {
-                "counterId": "{{counterId}}",
-                "displayName": "Updated"
-            }
+            "params": { "counterId": "{{counterId}}", "name": "Holiday", "type": "ToDate", "value": 85, "endDate": "2027-01-04" }
         }
-        """;
+        """);
 
-        _client.HandleMessage(message);
+        Assert.That(received, Is.Not.Null);
+        Assert.That(received!.Type, Is.EqualTo(CounterType.ToDate));
+        Assert.That(received.Value, Is.EqualTo(85));
+        Assert.That(received.Date, Is.EqualTo(new DateOnly(2027, 1, 4)));
+    }
 
-        Assert.That(_client.CounterCache.ContainsKey(counterId), Is.True);
-        Assert.That(_client.CounterCache[counterId].Value.DisplayName, Is.EqualTo("Updated"));
+    [Test]
+    public void HandleMessage_CounterUpdated_KeepsCachedDate_WhenNotSent()
+    {
+        var counterId = Guid.NewGuid();
+        _client.CounterCache[counterId] = new CacheEntry<Counter>(new Counter
+        {
+            Id = counterId, Name = "Holiday", Type = CounterType.ToDate, Value = 86, EndDate = new DateOnly(2027, 1, 4)
+        });
+
+        _client.HandleMessage($$"""
+        { "jsonrpc": "2.0", "method": "counterUpdated", "params": { "counterId": "{{counterId}}", "name": "Holiday", "type": "ToDate", "value": 85 } }
+        """);
+
+        var cached = _client.CounterCache[counterId].Value;
+        Assert.That(cached.Value, Is.EqualTo(85));
+        Assert.That(cached.EndDate, Is.EqualTo(new DateOnly(2027, 1, 4)));
     }
 
     [Test]
     public void HandleMessage_CounterUpdated_CreatesPartialCounter_WhenNotInCache()
     {
-        var counterId = Guid.NewGuid().ToString();
+        var counterId = Guid.NewGuid();
 
+        _client.HandleMessage($$"""
+        { "jsonrpc": "2.0", "method": "counterUpdated", "params": { "counterId": "{{counterId}}", "name": "Brand New", "type": "UpDown", "value": 3 } }
+        """);
+
+        Assert.That(_client.CounterCache.ContainsKey(counterId), Is.True);
+        var cached = _client.CounterCache[counterId].Value;
+        Assert.That(cached.Name, Is.EqualTo("Brand New"));
+        Assert.That(cached.Value, Is.EqualTo(3));
+        Assert.That(cached.Created, Is.Null);
+    }
+
+    [Test]
+    public void HandleMessage_CounterUpdated_UnknownType_StillFiresEvent()
+    {
+        var counterId = Guid.NewGuid();
         Counter? received = null;
         _client.CounterUpdated += c => received = c;
 
-        var message = $$"""
-        {
-            "jsonrpc": "2.0",
-            "method": "counterUpdated",
-            "params": {
-                "counterId": "{{counterId}}",
-                "displayName": "Brand New"
-            }
-        }
-        """;
-
-        _client.HandleMessage(message);
+        _client.HandleMessage($$"""
+        { "jsonrpc": "2.0", "method": "counterUpdated", "params": { "counterId": "{{counterId}}", "name": "Future", "type": "Stopwatch", "value": 7 } }
+        """);
 
         Assert.That(received, Is.Not.Null);
-        Assert.That(received!.Id, Is.EqualTo(counterId));
-        Assert.That(received.DisplayName, Is.EqualTo("Brand New"));
-        Assert.That(_client.CounterCache.ContainsKey(counterId), Is.True);
+        Assert.That(received!.Type, Is.EqualTo(CounterType.Unknown));
+        Assert.That(received.Value, Is.EqualTo(7));
     }
 
     #endregion
@@ -150,57 +153,20 @@ public class HandleMessageTests
     #region counterDeleted
 
     [Test]
-    public void HandleMessage_CounterDeleted_FiresEvent()
+    public void HandleMessage_CounterDeleted_FiresEvent_AndRemovesFromCache()
     {
         var counterId = Guid.NewGuid();
-        _client.CounterCache[counterId.ToString()] = new CacheEntry<Counter>(new Counter
-        {
-            Id = counterId.ToString(),
-            DisplayName = "To Delete"
-        });
+        _client.CounterCache[counterId] = new CacheEntry<Counter>(new Counter { Id = counterId, Name = "Gone" });
 
-        Guid? received = null;
-        _client.CounterDeleted += id => received = id;
+        Guid? receivedId = null;
+        _client.CounterDeleted += id => receivedId = id;
 
-        var message = $$"""
-        {
-            "jsonrpc": "2.0",
-            "method": "counterDeleted",
-            "params": {
-                "counterId": "{{counterId}}"
-            }
-        }
-        """;
+        _client.HandleMessage($$"""
+        { "jsonrpc": "2.0", "method": "counterDeleted", "params": { "counterId": "{{counterId}}" } }
+        """);
 
-        _client.HandleMessage(message);
-
-        Assert.That(received, Is.Not.Null);
-        Assert.That(received!.Value, Is.EqualTo(counterId));
-    }
-
-    [Test]
-    public void HandleMessage_CounterDeleted_RemovesFromCache()
-    {
-        var counterId = Guid.NewGuid();
-        _client.CounterCache[counterId.ToString()] = new CacheEntry<Counter>(new Counter
-        {
-            Id = counterId.ToString(),
-            DisplayName = "To Delete"
-        });
-
-        var message = $$"""
-        {
-            "jsonrpc": "2.0",
-            "method": "counterDeleted",
-            "params": {
-                "counterId": "{{counterId}}"
-            }
-        }
-        """;
-
-        _client.HandleMessage(message);
-
-        Assert.That(_client.CounterCache.ContainsKey(counterId.ToString()), Is.False);
+        Assert.That(receivedId, Is.EqualTo(counterId));
+        Assert.That(_client.CounterCache.ContainsKey(counterId), Is.False);
     }
 
     #endregion
@@ -208,62 +174,30 @@ public class HandleMessageTests
     #region counterMemberlistChanged
 
     [Test]
-    public void HandleMessage_CounterMemberlistChanged_FiresEvent()
+    public void HandleMessage_CounterMemberlistChanged_FiresEvent_AndInvalidatesCache()
     {
         var counterId = Guid.NewGuid();
+        _client.CounterCache[counterId] = new CacheEntry<Counter>(new Counter { Id = counterId, Name = "Shared" });
 
-        Guid? received = null;
-        _client.CounterMemberlistChanged += id => received = id;
+        Guid? receivedId = null;
+        _client.CounterMemberlistChanged += id => receivedId = id;
 
-        var message = $$"""
-        {
-            "jsonrpc": "2.0",
-            "method": "counterMemberlistChanged",
-            "params": {
-                "counterId": "{{counterId}}"
-            }
-        }
-        """;
+        _client.HandleMessage($$"""
+        { "jsonrpc": "2.0", "method": "counterMemberlistChanged", "params": { "counterId": "{{counterId}}" } }
+        """);
 
-        _client.HandleMessage(message);
-
-        Assert.That(received, Is.Not.Null);
-        Assert.That(received!.Value, Is.EqualTo(counterId));
-    }
-
-    [Test]
-    public void HandleMessage_CounterMemberlistChanged_InvalidatesCache()
-    {
-        var counterId = Guid.NewGuid();
-        _client.CounterCache[counterId.ToString()] = new CacheEntry<Counter>(new Counter
-        {
-            Id = counterId.ToString(),
-            DisplayName = "Has Members"
-        });
-
-        var message = $$"""
-        {
-            "jsonrpc": "2.0",
-            "method": "counterMemberlistChanged",
-            "params": {
-                "counterId": "{{counterId}}"
-            }
-        }
-        """;
-
-        _client.HandleMessage(message);
-
-        Assert.That(_client.CounterCache.ContainsKey(counterId.ToString()), Is.False);
+        Assert.That(receivedId, Is.EqualTo(counterId));
+        Assert.That(_client.CounterCache.ContainsKey(counterId), Is.False);
     }
 
     #endregion
 
-    #region Edge cases
+    #region robustness
 
     [Test]
     public void HandleMessage_MalformedJson_DoesNotThrow()
     {
-        Assert.DoesNotThrow(() => _client.HandleMessage("not valid json"));
+        Assert.DoesNotThrow(() => _client.HandleMessage("{ not json"));
     }
 
     [Test]
@@ -275,66 +209,47 @@ public class HandleMessageTests
     [Test]
     public void HandleMessage_UnknownMethod_DoesNotThrow()
     {
-        var message = """
-        {
-            "jsonrpc": "2.0",
-            "method": "unknownMethod",
-            "params": {}
-        }
-        """;
+        Assert.DoesNotThrow(() => _client.HandleMessage(
+            """{ "jsonrpc": "2.0", "method": "somethingNew", "params": {} }"""));
+    }
 
-        Assert.DoesNotThrow(() => _client.HandleMessage(message));
+    [Test]
+    public void HandleMessage_InvalidCounterId_DoesNotFireEvents()
+    {
+        var fired = false;
+        _client.CounterUpdated += _ => fired = true;
+        _client.CounterDeleted += _ => fired = true;
+
+        _client.HandleMessage("""{ "jsonrpc": "2.0", "method": "counterDeleted", "params": { "counterId": "not-a-guid" } }""");
+        _client.HandleMessage("""{ "jsonrpc": "2.0", "method": "counterUpdated", "params": { "name": "No id" } }""");
+
+        Assert.That(fired, Is.False);
     }
 
     [Test]
     public void HandleMessage_NullParams_DoesNotFireEvents()
     {
-        var updatedFired = false;
-        var deletedFired = false;
-        var memberlistFired = false;
+        var fired = false;
+        _client.CounterUpdated += _ => fired = true;
+        _client.CounterDeleted += _ => fired = true;
+        _client.CounterMemberlistChanged += _ => fired = true;
 
-        _client.CounterUpdated += _ => updatedFired = true;
-        _client.CounterDeleted += _ => deletedFired = true;
-        _client.CounterMemberlistChanged += _ => memberlistFired = true;
+        _client.HandleMessage("""{ "jsonrpc": "2.0", "method": "counterUpdated" }""");
+        _client.HandleMessage("""{ "jsonrpc": "2.0", "method": "counterDeleted" }""");
+        _client.HandleMessage("""{ "jsonrpc": "2.0", "method": "counterMemberlistChanged" }""");
 
-        var message = """
-        {
-            "jsonrpc": "2.0",
-            "method": "counterUpdated"
-        }
-        """;
-
-        _client.HandleMessage(message);
-
-        Assert.That(updatedFired, Is.False);
-        Assert.That(deletedFired, Is.False);
-        Assert.That(memberlistFired, Is.False);
+        Assert.That(fired, Is.False);
     }
 
     [Test]
     public void HandleMessage_NoSubscribers_DoesNotThrow()
     {
-        var counterId = Guid.NewGuid().ToString();
-        _client.CounterCache[counterId] = new CacheEntry<Counter>(new Counter
-        {
-            Id = counterId,
-            DisplayName = "Test"
-        });
+        var counterId = Guid.NewGuid();
 
-        var message = $$"""
-        {
-            "jsonrpc": "2.0",
-            "method": "counterUpdated",
-            "params": {
-                "counterId": "{{counterId}}",
-                "displayName": "Updated"
-            }
-        }
-        """;
-
-        Assert.DoesNotThrow(() => _client.HandleMessage(message));
+        Assert.DoesNotThrow(() => _client.HandleMessage($$"""
+        { "jsonrpc": "2.0", "method": "counterUpdated", "params": { "counterId": "{{counterId}}", "name": "X", "type": "UpDown", "value": 1 } }
+        """));
     }
 
     #endregion
 }
-

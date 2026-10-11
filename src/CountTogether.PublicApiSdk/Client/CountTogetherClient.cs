@@ -2,7 +2,9 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Net.WebSockets;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -22,23 +24,32 @@ namespace CountTogether.PublicApiSdk.Client;
 public sealed class CountTogetherClient : ICountTogetherClient
 {
     private const string BaseUrl = "https://developers.counttogether.app";
-    private static string ApiUrl => $"{BaseUrl}/v1";
-    private static string WsUrl => $"wss://{new Uri(BaseUrl).Host}/v1/ws";
+    private const string ApiVersionPath = "/v2";
+
+    private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(30);
+
+    private static readonly string LibraryVersion =
+        typeof(CountTogetherClient).Assembly.GetName().Version?.ToString() ?? "1.0.0";
 
     private string? _apiToken;
+    private string? _timeZone;
     private HttpClient? _httpClient;
+    private bool _ownsHttpClient;
     private bool _configured;
+    private bool _started;
     private bool _autoReconnect;
 
     private ClientWebSocket? _webSocket;
     private CancellationTokenSource? _wsCts;
     private volatile bool _disposed;
 
-    internal readonly ConcurrentDictionary<string, CacheEntry<Counter>> CounterCache = new();
+    internal string WebSocketBaseUrl = $"wss://{new Uri(BaseUrl).Host}{ApiVersionPath}/ws";
+
+    internal readonly ConcurrentDictionary<Guid, CacheEntry<Counter>> CounterCache = new();
 
     private static readonly TimeSpan CacheExpiration = TimeSpan.FromMinutes(1);
 
-    private static readonly JsonSerializerOptions JsonSerializerOptions = new()
+    internal static readonly JsonSerializerOptions JsonSerializerOptions = new()
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         PropertyNameCaseInsensitive = true,
@@ -60,21 +71,44 @@ public sealed class CountTogetherClient : ICountTogetherClient
     public async Task StartAsync(
         Action<CountTogetherClientConfiguration> configureClient, HttpClient? httpClient = null)
     {
+        if (_started)
+        {
+            throw new InvalidOperationException("The client has already been started.");
+        }
+
+        Configure(configureClient, httpClient);
+
+        try
+        {
+            await ConnectWebSocketAsync();
+            _started = true;
+        }
+        catch
+        {
+            await DisconnectWebSocketAsync();
+            ResetConfiguration();
+            throw;
+        }
+    }
+
+    internal void Configure(Action<CountTogetherClientConfiguration> configureClient, HttpClient? httpClient)
+    {
         var config = new CountTogetherClientConfiguration();
         configureClient(config);
 
-        _httpClient = httpClient;
-        _apiToken = config.ApiToken;
-        _autoReconnect = config.AutoReconnect;
-        _configured = true;
-
-
-        if (string.IsNullOrWhiteSpace(_apiToken))
+        if (string.IsNullOrWhiteSpace(config.ApiToken))
         {
             throw new ArgumentException("API token must be provided.", nameof(configureClient));
         }
 
-        await ConnectWebSocketAsync();
+        ResetConfiguration();
+
+        _apiToken = config.ApiToken;
+        _timeZone = string.IsNullOrWhiteSpace(config.TimeZone) ? null : config.TimeZone;
+        _autoReconnect = config.AutoReconnect;
+        _httpClient = httpClient ?? new HttpClient();
+        _ownsHttpClient = httpClient == null;
+        _configured = true;
     }
 
     /// <inheritdoc />
@@ -95,37 +129,73 @@ public sealed class CountTogetherClient : ICountTogetherClient
     public async Task<Counter> GetCounterAsync(Guid counterId)
     {
         EnsureConfigured();
-        var key = counterId.ToString();
 
-        if (CounterCache.TryGetValue(key, out var entry) && !entry.IsExpired(CacheExpiration))
+        if (CounterCache.TryGetValue(counterId, out var entry) && !entry.IsExpired(CacheExpiration))
         {
             return entry.Value;
         }
 
-        // Expired or missing – fetch single counter from API and update cache
-        var counter = await FetchCounterAsync(counterId);
-        CounterCache[key] = new CacheEntry<Counter>(counter);
+        var counter = await SendAsync<Counter>(HttpMethod.Get, BuildUrl($"/counters/{counterId}", _timeZone));
+        CounterCache[counterId] = new CacheEntry<Counter>(counter);
         return counter;
     }
 
     /// <inheritdoc />
-    public async Task<long> IncrementCounterAsync(Guid counterId)
+    public Task<long> IncrementCounterAsync(Guid counterId)
     {
         EnsureConfigured();
-        using var httpClient = CreateHttpClient();
-        var response = await httpClient.PostAsync($"{ApiUrl}/counters/{counterId}/increment", null);
-        response.EnsureSuccessStatusCode();
-        return await DeserializeResponse<long>(response);
+        return SendAsync<long>(HttpMethod.Post, BuildUrl($"/counters/{counterId}/increment", null));
     }
 
     /// <inheritdoc />
-    public async Task<long> DecrementCounterAsync(Guid counterId)
+    public Task<long> IncrementCounterAsync(Guid counterId, int amount)
+    {
+        EnsureValidAmount(amount);
+        EnsureConfigured();
+        return SendAsync<long>(HttpMethod.Post, BuildUrl($"/counters/{counterId}/increment/{amount}", null));
+    }
+
+    /// <inheritdoc />
+    public Task<long> DecrementCounterAsync(Guid counterId)
     {
         EnsureConfigured();
-        using var httpClient = CreateHttpClient();
-        var response = await httpClient.PostAsync($"{ApiUrl}/counters/{counterId}/decrement", null);
-        response.EnsureSuccessStatusCode();
-        return await DeserializeResponse<long>(response);
+        return SendAsync<long>(HttpMethod.Post, BuildUrl($"/counters/{counterId}/decrement", null));
+    }
+
+    /// <inheritdoc />
+    public Task<long> DecrementCounterAsync(Guid counterId, int amount)
+    {
+        EnsureValidAmount(amount);
+        EnsureConfigured();
+        return SendAsync<long>(HttpMethod.Post, BuildUrl($"/counters/{counterId}/decrement/{amount}", null));
+    }
+
+    /// <inheritdoc />
+    public async Task<Counter> UpdateCounterAsync(Guid counterId, UpdateCounterRequest request)
+    {
+        if (request == null)
+        {
+            throw new ArgumentNullException(nameof(request));
+        }
+
+        EnsureConfigured();
+        var counter = await SendAsync<Counter>(
+            HttpMethod.Patch, BuildUrl($"/counters/{counterId}", _timeZone), request);
+        CounterCache[counter.Id] = new CacheEntry<Counter>(counter);
+        return counter;
+    }
+
+    internal static string BuildUrl(string path, string? timeZone)
+    {
+        var url = $"{BaseUrl}{ApiVersionPath}{path}";
+        return string.IsNullOrWhiteSpace(timeZone) ? url : $"{url}?timezone={Uri.EscapeDataString(timeZone)}";
+    }
+
+    internal static Uri BuildWebSocketUri(string baseUrl, string? timeZone)
+    {
+        return new Uri(string.IsNullOrWhiteSpace(timeZone)
+            ? baseUrl
+            : $"{baseUrl}?timezone={Uri.EscapeDataString(timeZone)}");
     }
 
     #region WebSocket
@@ -134,14 +204,20 @@ public sealed class CountTogetherClient : ICountTogetherClient
     {
         _wsCts = new CancellationTokenSource();
 
-        _webSocket = new ClientWebSocket();
-        _webSocket.Options.SetRequestHeader("Authorization", $"Bearer {_apiToken}");
-
-        await _webSocket.ConnectAsync(new Uri(WsUrl), _wsCts.Token);
+        _webSocket = CreateWebSocket();
+        await _webSocket.ConnectAsync(BuildWebSocketUri(WebSocketBaseUrl, _timeZone), _wsCts.Token);
 
         await FetchAndCacheAllCountersAsync();
 
-        _ = Task.Run(() => ReceiveLoopAsync(_wsCts.Token));
+        var ct = _wsCts.Token;
+        _ = Task.Run(() => ReceiveLoopAsync(ct));
+    }
+
+    private ClientWebSocket CreateWebSocket()
+    {
+        var webSocket = new ClientWebSocket();
+        webSocket.Options.SetRequestHeader("Authorization", $"Bearer {_apiToken}");
+        return webSocket;
     }
 
     private async Task ReceiveLoopAsync(CancellationToken ct)
@@ -222,43 +298,27 @@ public sealed class CountTogetherClient : ICountTogetherClient
 
         var updatedParams = JsonSerializer.Deserialize<CounterUpdatedParams>(
             paramsElement.Value.GetRawText(), JsonSerializerOptions);
-        if (updatedParams == null)
+        if (updatedParams == null || updatedParams.CounterId == Guid.Empty)
         {
             return;
         }
 
-        var key = updatedParams.CounterId;
+        CounterCache.TryGetValue(updatedParams.CounterId, out var entry);
+        var cached = entry?.Value;
 
-        if (CounterCache.TryGetValue(key, out var entry))
+        var counter = new Counter
         {
-            // Merge updated fields into the cached counter
-            var counter = entry.Value;
-            if (updatedParams.DisplayName != null)
-            {
-                counter.DisplayName = updatedParams.DisplayName;
-            }
+            Id = updatedParams.CounterId,
+            Name = updatedParams.Name ?? cached?.Name ?? string.Empty,
+            Type = updatedParams.Type,
+            Value = updatedParams.Value ?? cached?.Value,
+            StartDate = updatedParams.StartDate ?? cached?.StartDate,
+            EndDate = updatedParams.EndDate ?? cached?.EndDate,
+            Created = cached?.Created
+        };
 
-            if (updatedParams.Data != null)
-            {
-                counter.Data = updatedParams.Data;
-            }
-
-            CounterCache[key] = new CacheEntry<Counter>(counter);
-            CounterUpdated?.Invoke(counter);
-        }
-        else
-        {
-            // Counter not in cache – build a partial object and cache it
-            var counter = new Counter
-            {
-                Id = updatedParams.CounterId,
-                DisplayName = updatedParams.DisplayName ?? string.Empty,
-                Data = updatedParams.Data
-            };
-
-            CounterCache[key] = new CacheEntry<Counter>(counter);
-            CounterUpdated?.Invoke(counter);
-        }
+        CounterCache[counter.Id] = new CacheEntry<Counter>(counter);
+        CounterUpdated?.Invoke(counter);
     }
 
     private void HandleCounterDeleted(JsonElement? paramsElement)
@@ -270,17 +330,13 @@ public sealed class CountTogetherClient : ICountTogetherClient
 
         var deletedParams = JsonSerializer.Deserialize<CounterDeletedParams>(
             paramsElement.Value.GetRawText(), JsonSerializerOptions);
-        if (deletedParams == null)
+        if (deletedParams == null || deletedParams.CounterId == Guid.Empty)
         {
             return;
         }
 
         CounterCache.TryRemove(deletedParams.CounterId, out _);
-
-        if (Guid.TryParse(deletedParams.CounterId, out var counterId))
-        {
-            CounterDeleted?.Invoke(counterId);
-        }
+        CounterDeleted?.Invoke(deletedParams.CounterId);
     }
 
     private void HandleCounterMemberlistChanged(JsonElement? paramsElement)
@@ -292,18 +348,13 @@ public sealed class CountTogetherClient : ICountTogetherClient
 
         var changedParams = JsonSerializer.Deserialize<CounterMemberlistChangedParams>(
             paramsElement.Value.GetRawText(), JsonSerializerOptions);
-        if (changedParams == null)
+        if (changedParams == null || changedParams.CounterId == Guid.Empty)
         {
             return;
         }
 
-        // Invalidate cache entry so the next access fetches fresh data including the new member list
         CounterCache.TryRemove(changedParams.CounterId, out _);
-
-        if (Guid.TryParse(changedParams.CounterId, out var counterId))
-        {
-            CounterMemberlistChanged?.Invoke(counterId);
-        }
+        CounterMemberlistChanged?.Invoke(changedParams.CounterId);
     }
 
     private async Task HandleDisconnectAsync(CancellationToken ct)
@@ -326,10 +377,8 @@ public sealed class CountTogetherClient : ICountTogetherClient
                 // Dispose old socket
                 _webSocket?.Dispose();
 
-                _webSocket = new ClientWebSocket();
-                _webSocket.Options.SetRequestHeader("Authorization", $"Bearer {_apiToken}");
-
-                await _webSocket.ConnectAsync(new Uri(WsUrl), ct);
+                _webSocket = CreateWebSocket();
+                await _webSocket.ConnectAsync(BuildWebSocketUri(WebSocketBaseUrl, _timeZone), ct);
 
                 // Refresh cache after reconnect
                 await FetchAndCacheAllCountersAsync();
@@ -379,10 +428,7 @@ public sealed class CountTogetherClient : ICountTogetherClient
 
     private async Task FetchAndCacheAllCountersAsync()
     {
-        using var httpClient = CreateHttpClient();
-        var response = await httpClient.GetAsync($"{ApiUrl}/counters");
-        response.EnsureSuccessStatusCode();
-        var counters = await DeserializeResponse<List<Counter>>(response);
+        var counters = await SendAsync<List<Counter>>(HttpMethod.Get, BuildUrl("/counters", _timeZone));
 
         CounterCache.Clear();
         foreach (var counter in counters)
@@ -391,12 +437,85 @@ public sealed class CountTogetherClient : ICountTogetherClient
         }
     }
 
-    private async Task<Counter> FetchCounterAsync(Guid counterId)
+    private async Task<T> SendAsync<T>(HttpMethod method, string url, object? body = null)
     {
-        using var httpClient = CreateHttpClient();
-        var response = await httpClient.GetAsync($"{ApiUrl}/counters/{counterId}");
-        response.EnsureSuccessStatusCode();
-        return await DeserializeResponse<Counter>(response);
+        var httpClient = _httpClient ?? throw new InvalidOperationException(
+            "CountTogether API is not configured. Call StartAsync first.");
+
+        using var request = new HttpRequestMessage(method, url);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiToken);
+        request.Headers.UserAgent.ParseAdd($"CountTogetherPublicApiSdkClient/{LibraryVersion}");
+        request.Headers.Add("Library-Version", LibraryVersion);
+        request.Headers.Add("Library-Platform", ".NET");
+        request.Headers.Add("Library-Platform-Version", Environment.Version.ToString());
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        if (body != null)
+        {
+            request.Content = new StringContent(
+                JsonSerializer.Serialize(body, body.GetType(), JsonSerializerOptions), Encoding.UTF8,
+                "application/json");
+        }
+
+        using var timeoutCts = new CancellationTokenSource(RequestTimeout);
+        using var response = await httpClient.SendAsync(request, timeoutCts.Token);
+        var content = await response.Content.ReadAsStringAsync(timeoutCts.Token);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw CreateApiException(response.StatusCode, content);
+        }
+
+        return JsonSerializer.Deserialize<T>(content, JsonSerializerOptions)!;
+    }
+
+    internal static CountTogetherApiException CreateApiException(HttpStatusCode statusCode, string? body)
+    {
+        string? message = null;
+        int? errorCode = null;
+
+        if (!string.IsNullOrWhiteSpace(body))
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(body);
+                var root = document.RootElement;
+                if (root.ValueKind == JsonValueKind.Object)
+                {
+                    message = GetStringProperty(root, "message")
+                              ?? GetStringProperty(root, "detail")
+                              ?? GetStringProperty(root, "title");
+                    if (root.TryGetProperty("code", out var code) && code.ValueKind == JsonValueKind.Number &&
+                        code.TryGetInt32(out var parsedCode))
+                    {
+                        errorCode = parsedCode;
+                    }
+                }
+                else if (root.ValueKind == JsonValueKind.String)
+                {
+                    message = root.GetString();
+                }
+            }
+            catch (JsonException)
+            {
+                message = body.Trim();
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            message = $"The CountTogether API responded with {(int)statusCode} ({statusCode}).";
+        }
+
+        return new CountTogetherApiException(message!, statusCode, errorCode,
+            string.IsNullOrEmpty(body) ? null : body);
+    }
+
+    private static string? GetStringProperty(JsonElement element, string name)
+    {
+        return element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
     }
 
     #endregion
@@ -409,43 +528,39 @@ public sealed class CountTogetherClient : ICountTogetherClient
         }
     }
 
-    private static async Task<T> DeserializeResponse<T>(HttpResponseMessage response)
+    private static void EnsureValidAmount(int amount)
     {
-        var json = await response.Content.ReadAsStringAsync();
-        return JsonSerializer.Deserialize<T>(json, JsonSerializerOptions)!;
+        if (amount <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(amount), amount, "Amount must be greater than zero.");
+        }
     }
 
-    private HttpClient CreateHttpClient()
+    private void ResetConfiguration()
     {
-        var httpClient = _httpClient ?? new HttpClient();
-        httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {_apiToken}");
-        httpClient.DefaultRequestHeaders.Add("User-Agent", "CountTogetherPublicApiSdkClient/1.0");
-        httpClient.DefaultRequestHeaders.Add(
-            "Library-Version", typeof(CountTogetherClient).Assembly.GetName().Version?.ToString() ?? "1.0.0");
-        httpClient.DefaultRequestHeaders.Add("Library-Platform", ".NET");
-        httpClient.DefaultRequestHeaders.Add("Library-Platform-Version", Environment.Version.ToString());
-        httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
-        httpClient.Timeout = new TimeSpan(0, 0, 30);
-        return httpClient;
-    }
+        _configured = false;
+        if (_ownsHttpClient)
+        {
+            _httpClient?.Dispose();
+        }
 
-    private void ReleaseUnmanagedResources()
-    {
-        _disposed = true;
-        DisconnectWebSocketAsync().GetAwaiter().GetResult();
+        _httpClient = null;
+        _ownsHttpClient = false;
+        _apiToken = null;
+        _timeZone = null;
     }
 
     /// <inheritdoc />
     public void Dispose()
     {
-        ReleaseUnmanagedResources();
-        GC.SuppressFinalize(this);
-    }
+        if (_disposed)
+        {
+            return;
+        }
 
-    /// <inheritdoc />
-    ~CountTogetherClient()
-    {
-        ReleaseUnmanagedResources();
+        _disposed = true;
+        DisconnectWebSocketAsync().GetAwaiter().GetResult();
+        ResetConfiguration();
     }
 }
 
