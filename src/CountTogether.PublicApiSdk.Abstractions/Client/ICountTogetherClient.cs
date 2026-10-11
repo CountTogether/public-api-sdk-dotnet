@@ -15,6 +15,7 @@ public interface ICountTogetherClient : IDisposable
 {
     /// <summary>
     /// Starts the client by applying the provided configuration. This method must be called before using any other client functionality.
+    /// API errors are thrown as <see cref="CountTogetherApiException"/>.
     /// </summary>
     Task StartAsync(Action<CountTogetherClientConfiguration> configureClient, HttpClient? httpClient = null);
 
@@ -46,12 +47,30 @@ public interface ICountTogetherClient : IDisposable
     Task<Counter> GetCounterAsync(Guid counterId);
     
     /// <summary>
-    /// Increments the specified counter by 1. This method sends a request to the server to update the counter, which will then trigger a CounterUpdated event for all connected clients (including the one that made the request).
+    /// Increments the specified counter by its configured step size and returns the new value. This method sends a request to the server to update the counter, which will then trigger a CounterUpdated event for all connected clients (including the one that made the request).
     /// </summary>
     Task<long> IncrementCounterAsync(Guid counterId);
+
+    /// <summary>
+    /// Increments the specified counter by <paramref name="amount"/> and returns the new value. The API accepts at most 1,000,000.
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="amount"/> is zero or negative.</exception>
+    Task<long> IncrementCounterAsync(Guid counterId, int amount);
     
     /// <summary>
-    /// Decrements the specified counter by 1. This method sends a request to the server to update the counter, which will then trigger a CounterUpdated event for all connected clients (including the one that made the request).
+    /// Decrements the specified counter by its configured step size and returns the new value. This method sends a request to the server to update the counter, which will then trigger a CounterUpdated event for all connected clients (including the one that made the request).
     /// </summary>
     Task<long> DecrementCounterAsync(Guid counterId);
+
+    /// <summary>
+    /// Decrements the specified counter by <paramref name="amount"/> and returns the new value. The API accepts at most 1,000,000.
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="amount"/> is zero or negative.</exception>
+    Task<long> DecrementCounterAsync(Guid counterId, int amount);
+
+    /// <summary>
+    /// Partially updates a counter (name, value, start or end date) and returns the updated counter. Requires admin
+    /// rights on the counter. Setting <see cref="UpdateCounterRequest.Value"/> currently resets the counter's step size to 1.
+    /// </summary>
+    Task<Counter> UpdateCounterAsync(Guid counterId, UpdateCounterRequest request);
 }

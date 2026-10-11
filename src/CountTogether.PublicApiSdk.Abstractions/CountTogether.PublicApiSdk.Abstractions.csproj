@@ -11,6 +11,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="CountTogether.PublicApiSdk.Tests" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\CountTogether.PublicApiSdk.Models\CountTogether.PublicApiSdk.Models.csproj" />
   </ItemGroup>
 </Project>

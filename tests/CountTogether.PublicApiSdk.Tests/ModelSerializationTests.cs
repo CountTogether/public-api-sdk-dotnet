@@ -1,4 +1,5 @@
 using System.Text.Json;
+using CountTogether.PublicApiSdk.Client;
 using CountTogether.PublicApiSdk.Models;
 using CountTogether.PublicApiSdk.Models.WebSocket;
 #pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
@@ -8,170 +9,221 @@ namespace CountTogether.PublicApiSdk.Tests;
 [TestFixture]
 public class ModelSerializationTests
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
+    private static readonly JsonSerializerOptions JsonOptions = CountTogetherClient.JsonSerializerOptions;
 
     [Test]
-    public void Counter_Deserializes_AllProperties()
+    public void Counter_UpDown_Deserializes()
     {
         const string json = """
         {
-            "id": "01234567-89ab-cdef-0123-456789abcdef",
-            "displayName": "My Counter",
+            "id": "01998733-6251-731b-8631-4efe03770b43",
+            "name": "My Counter",
             "type": "UpDown",
-            "members": [
-                { "userId": "user-1", "displayName": "Alice", "isAdmin": true }
-            ],
-            "data": { "value": 42 }
+            "value": 42,
+            "created": "2025-03-01T12:00:00.123456"
         }
         """;
 
         var counter = JsonSerializer.Deserialize<Counter>(json, JsonOptions)!;
 
-        Assert.That(counter.Id, Is.EqualTo("01234567-89ab-cdef-0123-456789abcdef"));
-        Assert.That(counter.DisplayName, Is.EqualTo("My Counter"));
+        Assert.That(counter.Id, Is.EqualTo(Guid.Parse("01998733-6251-731b-8631-4efe03770b43")));
+        Assert.That(counter.Name, Is.EqualTo("My Counter"));
         Assert.That(counter.Type, Is.EqualTo(CounterType.UpDown));
-        Assert.That(counter.Members, Has.Count.EqualTo(1));
-        Assert.That(counter.Members[0].UserId, Is.EqualTo("user-1"));
-        Assert.That(counter.Members[0].DisplayName, Is.EqualTo("Alice"));
-        Assert.That(counter.Members[0].IsAdmin, Is.True);
-        Assert.That(counter.Data, Is.Not.Null);
+        Assert.That(counter.Value, Is.EqualTo(42));
+        Assert.That(counter.StartDate, Is.Null);
+        Assert.That(counter.EndDate, Is.Null);
+        Assert.That(counter.Date, Is.Null);
     }
 
     [Test]
-    public void Counter_Deserializes_WithNullData()
+    public void Counter_FromDate_ExposesStartDateAsDate()
     {
         const string json = """
         {
-            "id": "01234567-89ab-cdef-0123-456789abcdef",
-            "displayName": "My Counter",
+            "id": "01998733-6251-731b-8631-4efe03770b43",
+            "name": "Together",
             "type": "FromDate",
-            "members": []
+            "value": 3474,
+            "startDate": "2017-04-07",
+            "created": "0001-01-01T00:00:00"
         }
         """;
 
         var counter = JsonSerializer.Deserialize<Counter>(json, JsonOptions)!;
 
-        Assert.That(counter.Data, Is.Null);
         Assert.That(counter.Type, Is.EqualTo(CounterType.FromDate));
-        Assert.That(counter.Members, Is.Empty);
+        Assert.That(counter.Value, Is.EqualTo(3474));
+        Assert.That(counter.StartDate, Is.EqualTo(new DateOnly(2017, 4, 7)));
+        Assert.That(counter.EndDate, Is.Null);
+        Assert.That(counter.Date, Is.EqualTo(new DateOnly(2017, 4, 7)));
     }
 
     [Test]
-    public void JsonRpcNotification_Deserializes_WithParams()
+    public void Counter_ToDate_ExposesEndDateAsDate()
     {
         const string json = """
         {
-            "jsonrpc": "2.0",
-            "method": "counterUpdated",
-            "params": { "counterId": "abc-123" }
+            "id": "01998733-6251-731b-8631-4efe03770b43",
+            "name": "Holiday",
+            "type": "ToDate",
+            "value": -1,
+            "endDate": "2027-01-04",
+            "created": "0001-01-01T00:00:00"
         }
+        """;
+
+        var counter = JsonSerializer.Deserialize<Counter>(json, JsonOptions)!;
+
+        Assert.That(counter.Type, Is.EqualTo(CounterType.ToDate));
+        Assert.That(counter.Value, Is.EqualTo(-1));
+        Assert.That(counter.StartDate, Is.Null);
+        Assert.That(counter.EndDate, Is.EqualTo(new DateOnly(2027, 1, 4)));
+        Assert.That(counter.Date, Is.EqualTo(new DateOnly(2027, 1, 4)));
+    }
+
+    [Test]
+    public void Counter_Created_WithoutOffset_IsUtc()
+    {
+        const string json = """{ "id": "01998733-6251-731b-8631-4efe03770b43", "created": "2025-03-01T12:00:00.123456" }""";
+
+        var counter = JsonSerializer.Deserialize<Counter>(json, JsonOptions)!;
+
+        Assert.That(counter.Created, Is.EqualTo(new DateTime(2025, 3, 1, 12, 0, 0, DateTimeKind.Utc).AddTicks(1234560)));
+        Assert.That(counter.Created!.Value.Kind, Is.EqualTo(DateTimeKind.Utc));
+    }
+
+    [Test]
+    public void Counter_Created_WithOffset_IsConvertedToUtc()
+    {
+        const string json = """{ "id": "01998733-6251-731b-8631-4efe03770b43", "created": "2025-03-01T12:00:00+02:00" }""";
+
+        var counter = JsonSerializer.Deserialize<Counter>(json, JsonOptions)!;
+
+        Assert.That(counter.Created, Is.EqualTo(new DateTime(2025, 3, 1, 10, 0, 0, DateTimeKind.Utc)));
+        Assert.That(counter.Created!.Value.Kind, Is.EqualTo(DateTimeKind.Utc));
+    }
+
+    [Test]
+    public void Counter_Created_WithZulu_IsUtc()
+    {
+        const string json = """{ "id": "01998733-6251-731b-8631-4efe03770b43", "created": "2025-03-01T12:00:00Z" }""";
+
+        var counter = JsonSerializer.Deserialize<Counter>(json, JsonOptions)!;
+
+        Assert.That(counter.Created, Is.EqualTo(new DateTime(2025, 3, 1, 12, 0, 0, DateTimeKind.Utc)));
+    }
+
+    [Test]
+    public void Counter_Created_Unset_IsNull()
+    {
+        const string json = """{ "id": "01998733-6251-731b-8631-4efe03770b43", "created": "0001-01-01T00:00:00" }""";
+
+        var counter = JsonSerializer.Deserialize<Counter>(json, JsonOptions)!;
+
+        Assert.That(counter.Created, Is.Null);
+    }
+
+    [TestCase("\"Foo\"")]
+    [TestCase("\"5\"")]
+    [TestCase("\"\"")]
+    [TestCase("42")]
+    public void Counter_UnknownType_IsUnknown(string typeJson)
+    {
+        var json = $$"""{ "id": "01998733-6251-731b-8631-4efe03770b43", "type": {{typeJson}}, "value": 1 }""";
+
+        var counter = JsonSerializer.Deserialize<Counter>(json, JsonOptions)!;
+
+        Assert.That(counter.Type, Is.EqualTo(CounterType.Unknown));
+        Assert.That(counter.Date, Is.Null);
+    }
+
+    [Test]
+    public void CounterList_WithUnknownType_StillDeserializes()
+    {
+        const string json = """
+        [
+            { "id": "01998733-6251-731b-8631-4efe03770b43", "name": "A", "type": "Stopwatch" },
+            { "id": "0199f73d-6b5b-77bb-994f-fbbbf0107d17", "name": "B", "type": "UpDown", "value": 3 }
+        ]
+        """;
+
+        var counters = JsonSerializer.Deserialize<List<Counter>>(json, JsonOptions)!;
+
+        Assert.That(counters.Select(c => c.Type), Is.EqualTo(new[] { CounterType.Unknown, CounterType.UpDown }));
+    }
+
+    [Test]
+    public void Counter_Serializes_TypeAsString_AndDatesAsIsoDate()
+    {
+        var counter = new Counter
+        {
+            Id = Guid.Parse("01998733-6251-731b-8631-4efe03770b43"),
+            Name = "Holiday",
+            Type = CounterType.ToDate,
+            Value = 5,
+            EndDate = new DateOnly(2027, 1, 4)
+        };
+
+        var json = JsonSerializer.Serialize(counter, JsonOptions);
+
+        Assert.That(json, Does.Contain("\"type\":\"ToDate\""));
+        Assert.That(json, Does.Contain("\"endDate\":\"2027-01-04\""));
+        Assert.That(json, Does.Not.Contain("startDate"));
+        Assert.That(json, Does.Not.Contain("\"date\""));
+    }
+
+    [Test]
+    public void UpdateCounterRequest_OmitsUnsetFields()
+    {
+        var request = new UpdateCounterRequest { EndDate = new DateOnly(2031, 6, 15) };
+
+        var json = JsonSerializer.Serialize(request, new JsonSerializerOptions());
+
+        Assert.That(json, Is.EqualTo("""{"endDate":"2031-06-15"}"""));
+    }
+
+    [Test]
+    public void CounterUpdatedParams_Deserializes_V2Payload()
+    {
+        const string json = """
+        {
+            "counterId": "01998733-6251-731b-8631-4efe03770b43",
+            "name": "Holiday",
+            "type": "ToDate",
+            "value": 85,
+            "endDate": "2027-01-04"
+        }
+        """;
+
+        var updated = JsonSerializer.Deserialize<CounterUpdatedParams>(json, JsonOptions)!;
+
+        Assert.That(updated.CounterId, Is.EqualTo(Guid.Parse("01998733-6251-731b-8631-4efe03770b43")));
+        Assert.That(updated.Name, Is.EqualTo("Holiday"));
+        Assert.That(updated.Type, Is.EqualTo(CounterType.ToDate));
+        Assert.That(updated.Value, Is.EqualTo(85));
+        Assert.That(updated.EndDate, Is.EqualTo(new DateOnly(2027, 1, 4)));
+    }
+
+    [Test]
+    public void ErrorObject_WithoutCode_HasNullCode()
+    {
+        var error = JsonSerializer.Deserialize<ErrorObject>("""{ "message": "Forbidden" }""", JsonOptions)!;
+
+        Assert.That(error.Message, Is.EqualTo("Forbidden"));
+        Assert.That(error.Code, Is.Null);
+    }
+
+    [Test]
+    public void JsonRpcNotification_Deserializes()
+    {
+        const string json = """
+        { "jsonrpc": "2.0", "method": "counterDeleted", "params": { "counterId": "01998733-6251-731b-8631-4efe03770b43" } }
         """;
 
         var notification = JsonSerializer.Deserialize<JsonRpcNotification>(json, JsonOptions)!;
 
         Assert.That(notification.JsonRpc, Is.EqualTo("2.0"));
-        Assert.That(notification.Method, Is.EqualTo("counterUpdated"));
+        Assert.That(notification.Method, Is.EqualTo("counterDeleted"));
         Assert.That(notification.Params, Is.Not.Null);
     }
-
-    [Test]
-    public void JsonRpcNotification_Deserializes_WithoutParams()
-    {
-        const string json = """
-        {
-            "jsonrpc": "2.0",
-            "method": "counterDeleted"
-        }
-        """;
-
-        var notification = JsonSerializer.Deserialize<JsonRpcNotification>(json, JsonOptions)!;
-
-        Assert.That(notification.Method, Is.EqualTo("counterDeleted"));
-        Assert.That(notification.Params, Is.Null);
-    }
-
-    [Test]
-    public void CounterUpdatedParams_Deserializes()
-    {
-        const string json = """
-        {
-            "counterId": "abc-123",
-            "displayName": "Updated Name",
-            "data": { "value": 99 }
-        }
-        """;
-
-        var p = JsonSerializer.Deserialize<CounterUpdatedParams>(json, JsonOptions)!;
-
-        Assert.That(p.CounterId, Is.EqualTo("abc-123"));
-        Assert.That(p.DisplayName, Is.EqualTo("Updated Name"));
-        Assert.That(p.Data, Is.Not.Null);
-    }
-
-    [Test]
-    public void CounterUpdatedParams_Deserializes_WithNullOptionals()
-    {
-        const string json = """
-        {
-            "counterId": "abc-123"
-        }
-        """;
-
-        var p = JsonSerializer.Deserialize<CounterUpdatedParams>(json, JsonOptions)!;
-
-        Assert.That(p.CounterId, Is.EqualTo("abc-123"));
-        Assert.That(p.DisplayName, Is.Null);
-        Assert.That(p.Data, Is.Null);
-    }
-
-    [Test]
-    public void CounterDeletedParams_Deserializes()
-    {
-        const string json = """
-        {
-            "counterId": "abc-123"
-        }
-        """;
-
-        var p = JsonSerializer.Deserialize<CounterDeletedParams>(json, JsonOptions)!;
-
-        Assert.That(p.CounterId, Is.EqualTo("abc-123"));
-    }
-
-    [Test]
-    public void CounterMemberlistChangedParams_Deserializes()
-    {
-        const string json = """
-        {
-            "counterId": "abc-123"
-        }
-        """;
-
-        var p = JsonSerializer.Deserialize<CounterMemberlistChangedParams>(json, JsonOptions)!;
-
-        Assert.That(p.CounterId, Is.EqualTo("abc-123"));
-    }
-
-    [Test]
-    public void CounterMember_Deserializes()
-    {
-        const string json = """
-        {
-            "userId": "user-42",
-            "displayName": "Bob",
-            "isAdmin": false
-        }
-        """;
-
-        var member = JsonSerializer.Deserialize<CounterMember>(json, JsonOptions)!;
-
-        Assert.That(member.UserId, Is.EqualTo("user-42"));
-        Assert.That(member.DisplayName, Is.EqualTo("Bob"));
-        Assert.That(member.IsAdmin, Is.False);
-    }
 }
-

@@ -54,6 +54,8 @@ jobs:
           path: |
             src/**/bin/Release/
             src/**/obj/Release/
+            tests/**/bin/Release/
+            tests/**/obj/Release/
           retention-days: 3
 
       - name: Upload NuGet packages
