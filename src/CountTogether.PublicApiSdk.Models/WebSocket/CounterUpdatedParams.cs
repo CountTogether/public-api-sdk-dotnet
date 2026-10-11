@@ -1,5 +1,6 @@
-using System.Text.Json;
+using System;
 using System.Text.Json.Serialization;
+using CountTogether.PublicApiSdk.Models.Converters;
 
 namespace CountTogether.PublicApiSdk.Models.WebSocket;
 
@@ -9,21 +10,39 @@ namespace CountTogether.PublicApiSdk.Models.WebSocket;
 public sealed class CounterUpdatedParams
 {
     /// <summary>
-    /// The id of the updated counter (UUID).
+    /// The id of the updated counter.
     /// </summary>
     [JsonPropertyName("counterId")]
-    public string CounterId { get; set; } = null!;
+    public Guid CounterId { get; set; }
 
     /// <summary>
-    /// Updated display name (optional, may be <c>null</c>).
+    /// Display name of the counter.
     /// </summary>
-    [JsonPropertyName("displayName")]
-    public string? DisplayName { get; set; }
+    [JsonPropertyName("name")]
+    public string? Name { get; set; }
 
     /// <summary>
-    /// Updated type-specific data payload. May be <c>null</c>.
+    /// The type of counter.
     /// </summary>
-    [JsonPropertyName("data")]
-    public JsonElement? Data { get; set; }
+    [JsonPropertyName("type")]
+    [JsonConverter(typeof(CounterTypeJsonConverter))]
+    public CounterType Type { get; set; }
+
+    /// <summary>
+    /// The current value, see <see cref="Counter.Value"/>.
+    /// </summary>
+    [JsonPropertyName("value")]
+    public long? Value { get; set; }
+
+    /// <summary>
+    /// Start date of a <see cref="CounterType.FromDate"/> counter.
+    /// </summary>
+    [JsonPropertyName("startDate")]
+    public DateOnly? StartDate { get; set; }
+
+    /// <summary>
+    /// End date of a <see cref="CounterType.ToDate"/> counter.
+    /// </summary>
+    [JsonPropertyName("endDate")]
+    public DateOnly? EndDate { get; set; }
 }
-
