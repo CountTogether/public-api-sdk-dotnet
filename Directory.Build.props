@@ -13,8 +13,8 @@
         <Company>CountTogether</Company>
         <Copyright>Copyright © CountTogether $([System.DateTime]::Now.Year)</Copyright>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
-        <PackageProjectUrl>https://github.com/nicobh15/public-api-sdk-dotnet</PackageProjectUrl>
-        <RepositoryUrl>https://github.com/nicobh15/public-api-sdk-dotnet</RepositoryUrl>
+        <PackageProjectUrl>https://github.com/CountTogether/public-api-sdk-dotnet</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/CountTogether/public-api-sdk-dotnet</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
         <PackageTags>counttogether;sdk;api;counter</PackageTags>
         <PackageReadmeFile>README.md</PackageReadmeFile>
